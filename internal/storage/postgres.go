@@ -6,11 +6,14 @@ import (
 	"errors"
 	"os"
 
+	"api-project/internal/storage/sqlcdb"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type Postgres struct {
-	db *sql.DB
+	db      *sql.DB
+	queries *sqlcdb.Queries
 }
 
 func NewPostgres() (*Postgres, error) {
@@ -29,7 +32,10 @@ func NewPostgres() (*Postgres, error) {
 		return nil, err
 	}
 
-	return &Postgres{db: db}, nil
+	return &Postgres{
+		db:      db,
+		queries: sqlcdb.New(db),
+	}, nil
 }
 
 func (p *Postgres) Close() error {
@@ -39,19 +45,13 @@ func (p *Postgres) Close() error {
 func (p *Postgres) Save(ctx context.Context, originalUrl string) (int64, string, error) {
 	alias := generateAlias(8)
 
-	var id int64
-	err := p.db.QueryRowContext(
-		ctx,
-		`INSERT INTO urls(alias, original)
-		 VALUES ($1, $2)
-		 RETURNING id`,
-		alias,
-		originalUrl,
-	).Scan(&id)
-
+	row, err := p.queries.SaveURL(ctx, sqlcdb.SaveURLParams{
+		Alias: alias,
+		Url:   originalUrl,
+	})
 	if err != nil {
 		return 0, "", err
 	}
 
-	return id, alias, nil
+	return row.ID, row.Alias, nil
 }

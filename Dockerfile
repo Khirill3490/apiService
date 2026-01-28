@@ -20,6 +20,8 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /app/bin/url-shortener /app/url-shortener
+COPY --from=builder /app/config /app/config
+
 
 EXPOSE 8080
 ENTRYPOINT ["/app/url-shortener"]
