@@ -55,3 +55,28 @@ func (p *Postgres) Save(ctx context.Context, originalUrl string) (int64, string,
 
 	return row.ID, row.Alias, nil
 }
+
+func (p *Postgres) Get(ctx context.Context, alias string) (string, error) {
+	originallUrl, err := p.queries.GetURLByAlias(ctx, alias)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrNotFound{}
+		}
+		return "", err
+	}
+
+	return originallUrl, nil
+}
+
+func (p *Postgres) Delete(ctx context.Context, alias string) error {
+	rows, err := p.queries.DeleteURLByAlias(ctx, alias)
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return ErrNotFound{}
+	}
+
+	return err
+}

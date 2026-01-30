@@ -9,6 +9,32 @@ import (
 	"context"
 )
 
+const deleteURLByAlias = `-- name: DeleteURLByAlias :execrows
+DELETE FROM urls
+WHERE alias = $1
+`
+
+func (q *Queries) DeleteURLByAlias(ctx context.Context, alias string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteURLByAlias, alias)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const getURLByAlias = `-- name: GetURLByAlias :one
+SELECT url
+FROM urls
+WHERE alias = $1
+`
+
+func (q *Queries) GetURLByAlias(ctx context.Context, alias string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getURLByAlias, alias)
+	var url string
+	err := row.Scan(&url)
+	return url, err
+}
+
 const saveURL = `-- name: SaveURL :one
 INSERT INTO urls (alias, url)
 VALUES ($1, $2)
