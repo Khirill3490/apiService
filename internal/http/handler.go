@@ -1,6 +1,7 @@
 package http
 
 import (
+	"errors"
 	"log/slog"
 
 	"encoding/json"
@@ -8,22 +9,29 @@ import (
 	"strings"
 
 	"api-project/internal/storage"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-playground/validator/v10"
 )
 
 type Handler struct {
-	store storage.UrlStorage
-	log   *slog.Logger
+	store    storage.UrlStorage
+	log      *slog.Logger
+	validate *validator.Validate
 }
 
 func New(store storage.UrlStorage, log *slog.Logger) *Handler {
+	v := validator.New()
+
 	return &Handler{
-		store: store,
-		log:   log,
+		store:    store,
+		log:      log,
+		validate: v,
 	}
 }
 
 type createUrlRequest struct {
-	Url string `json:"url"`
+	Url string `json:"url" validate:"required,url"`
 }
 
 type createUrlResponse struct {
@@ -43,16 +51,16 @@ func (h *Handler) CreateURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2) простая валидация
 	req.Url = strings.TrimSpace(req.Url)
-	if req.Url == "" {
-		h.writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "url is required",
+
+	if err := h.validate.Struct(req); err != nil {
+		h.writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error":  "validation failed",
+			"fields": validationErrorsToMap(err),
 		})
 		return
 	}
 
-	// 3) сохраняем в БД
 	id, alias, err := h.store.Save(r.Context(), req.Url)
 	if err != nil {
 		h.log.Error("failed to save url", slog.Any("err", err))
@@ -84,11 +92,75 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	alias := chi.URLParam(r, "alias")
+	alias = strings.TrimSpace(alias)
+	
+	if alias == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	var nf storage.ErrNotFound
+
+	original, err := h.store.Get(r.Context(), alias)
+	if err != nil {
+		if errors.Is(err, &nf) {
+			http.NotFound(w, r)
+			return
+		}
+		h.log.Error("failed to get url", slog.Any("err", err))
+		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+
+	http.Redirect(w, r, original, http.StatusFound) // 302
 }
 
 func (h *Handler) DeleteURL(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	alias := chi.URLParam(r, "alias")
+	alias = strings.TrimSpace(alias)
+	if alias == "" {
+		h.writeJSON(w, http.StatusBadRequest, map[string]string{"error": "alias is required"})
+		return
+	}
+
+	var nf storage.ErrNotFound
+
+	err := h.store.Delete(r.Context(), alias)
+	if err != nil {
+		if errors.Is(err, &nf) {
+			h.writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+			return
+		}
+		h.log.Error("failed to delete url", slog.Any("err", err))
+		h.writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent) // 204
 }
 
+func validationErrorsToMap(err error) map[string]string {
+	out := make(map[string]string)
 
+	ve, ok := err.(validator.ValidationErrors)
+	if !ok {
+		out["_"] = "invalid request"
+		return out
+	}
+
+	for _, fe := range ve {
+		field := strings.ToLower(fe.Field())
+
+		switch fe.Tag() {
+		case "required":
+			out[field] = "is required"
+		case "url":
+			out[field] = "must be a valid URL (include http/https)"
+		default:
+			out[field] = "is invalid"
+		}
+	}
+
+	return out
+}
