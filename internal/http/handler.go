@@ -18,15 +18,18 @@ type Handler struct {
 	store    storage.UrlStorage
 	log      *slog.Logger
 	validate *validator.Validate
+
+	jwtSecret []byte
 }
 
-func New(store storage.UrlStorage, log *slog.Logger) *Handler {
+func New(store storage.UrlStorage, log *slog.Logger, jwtSecret []byte) *Handler {
 	v := validator.New()
 
 	return &Handler{
-		store:    store,
-		log:      log,
-		validate: v,
+		store:     store,
+		log:       log,
+		validate:  v,
+		jwtSecret: jwtSecret,
 	}
 }
 
@@ -94,7 +97,7 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, v any) {
 func (h *Handler) Redirect(w http.ResponseWriter, r *http.Request) {
 	alias := chi.URLParam(r, "alias")
 	alias = strings.TrimSpace(alias)
-	
+
 	if alias == "" {
 		http.NotFound(w, r)
 		return
@@ -164,3 +167,34 @@ func validationErrorsToMap(err error) map[string]string {
 
 	return out
 }
+
+type loginRequest struct {
+	Username string `json:"username" validate:"required,min=3,max=20"`
+	Password string `json:"password" validate:"required,min=3,max=20"`
+}
+
+type tokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
+    // TODO: реализуем на следующем шаге
+    http.Error(w, "not implemented", http.StatusNotImplemented)
+}
+
+func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
+    // TODO
+    http.Error(w, "not implemented", http.StatusNotImplemented)
+}
+
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+    // TODO
+    w.WriteHeader(http.StatusNoContent)
+}
+
+

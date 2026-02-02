@@ -1,9 +1,10 @@
 package main
 
 import (
+	"api-project/internal/auth"
 	"api-project/internal/config"
-	"api-project/internal/storage"
 	myhttp "api-project/internal/http"
+	"api-project/internal/storage"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -31,7 +32,17 @@ func main() {
 
 	fmt.Printf("Конфигурация загружена: %+v\n", cfg)
 
-	handlers := myhttp.New(store, logger)
+	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
+	if len(jwtSecret) < 16 {
+		logger.Error("JWT_SECRET is too short (set env JWT_SECRET)")
+		return
+	}
+
+	handlers := myhttp.New(store, logger, jwtSecret)
+
+	// ВРЕМЕННО: вывести токен в лог, чтобы руками проверить middleware
+	t, _ := auth.GenerateAccessToken(1, jwtSecret, 15*time.Minute)
+	logger.Info("DEV TOKEN", slog.String("token", t))
 
 	router := chi.NewRouter()
 
@@ -46,12 +57,20 @@ func main() {
 	})
 
 	router.Route("/api", func(r chi.Router) {
-		r.Post("/url", handlers.CreateURL)           // POST /api/url
-		r.Delete("/url/{alias}", handlers.DeleteURL) // DELETE /api/url/{alias} (сделаем позже)
+		r.Route("/auth", func(r chi.Router) {
+			r.Post("/login", handlers.Login)
+			r.Post("/refresh", handlers.Refresh)
+			r.Post("/logout", handlers.Logout)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(handlers.AuthRequired)
+			r.Post("/url", handlers.CreateURL)
+			r.Delete("/url/{alias}", handlers.DeleteURL)
+		})
 	})
 
-	// Редирект по короткой ссылке (обычно без /api, чтобы было коротко)
-	router.Get("/{alias}", handlers.Redirect) // GET /abc123 (сделаем позже)
+	router.Get("/{alias}", handlers.Redirect)
 
 	logger.Info("starting http server", slog.String("addr", ":8080"))
 	if err := http.ListenAndServe(":8080", router); err != nil {
