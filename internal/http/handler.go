@@ -15,14 +15,14 @@ import (
 )
 
 type Handler struct {
-	store    storage.UrlStorage
+	store    storage.Store
 	log      *slog.Logger
 	validate *validator.Validate
 
 	jwtSecret []byte
 }
 
-func New(store storage.UrlStorage, log *slog.Logger, jwtSecret []byte) *Handler {
+func New(store storage.Store, log *slog.Logger, jwtSecret []byte) *Handler {
 	v := validator.New()
 
 	return &Handler{
@@ -183,18 +183,16 @@ type refreshRequest struct {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-    // TODO: реализуем на следующем шаге
-    http.Error(w, "not implemented", http.StatusNotImplemented)
+	// TODO: реализуем на следующем шаге
+	http.Error(w, "not implemented", http.StatusNotImplemented)
 }
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {
-    // TODO
-    http.Error(w, "not implemented", http.StatusNotImplemented)
+	// TODO
+	http.Error(w, "not implemented", http.StatusNotImplemented)
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-    // TODO
-    w.WriteHeader(http.StatusNoContent)
+	// TODO
+	w.WriteHeader(http.StatusNoContent)
 }
-
-

@@ -80,3 +80,75 @@ func (p *Postgres) Delete(ctx context.Context, alias string) error {
 
 	return err
 }
+
+
+func (p *Postgres) GetUserByUsername(ctx context.Context, username string) (User, error) {
+	row, err := p.queries.GetUserByUsername(ctx, username)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return User{}, ErrNotFound{}
+		}
+		return User{}, err
+	}
+
+	return User{
+		ID:           row.ID,
+		Username:     row.Username,
+		PasswordHash: row.PasswordHash,
+	}, nil
+}
+
+func (p *Postgres) InsertRefreshToken(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) (int64, error) {
+	return p.queries.InsertRefreshToken(ctx, sqlcdb.InsertRefreshTokenParams{
+		UserID:    userID,
+		TokenHash: tokenHash,
+		ExpiresAt: expiresAt,
+	})
+}
+
+func (p *Postgres) GetRefreshTokenValid(ctx context.Context, tokenHash string) (RefreshToken, error) {
+	row, err := p.queries.GetRefreshTokenValid(ctx, tokenHash)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return RefreshToken{}, ErrNotFound{}
+		}
+		return RefreshToken{}, err
+	}
+
+	return RefreshToken{
+		ID:        row.ID,
+		UserID:    row.UserID,
+		ExpiresAt: row.ExpiresAt,
+	}, nil
+}
+
+func (p *Postgres) RevokeRefreshToken(ctx context.Context, id int64, replacedBy *int64) error {
+	var rb sql.NullInt64
+	if replacedBy != nil {
+		rb = sql.NullInt64{Int64: *replacedBy, Valid: true}
+	}
+
+	rows, err := p.queries.RevokeRefreshToken(ctx, sqlcdb.RevokeRefreshTokenParams{
+		ID:         id,
+		ReplacedBy: rb,
+	})
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrNotFound{}
+	}
+	return nil
+}
+
+func (p *Postgres) RevokeRefreshTokenByHash(ctx context.Context, tokenHash string) error {
+	rows, err := p.queries.RevokeRefreshTokenByHash(ctx, tokenHash)
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ErrNotFound{}
+	}
+	return nil
+}
+
